@@ -299,7 +299,7 @@ class Engine(subprocess.Popen):
                 time['binc'] = time['inc']
                 del time['inc']
                 
-             elif len(time.keys()) == 4:
+            elif len(time.keys()) == 4:
                 assert 'winc' in time
                 assert 'binc' in time
             
