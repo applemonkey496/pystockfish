@@ -128,13 +128,14 @@ class Engine(subprocess.Popen):
     engines.
     """
 
-    def __init__(self, depth=2, ponder=False, param={}, rand=False, rand_min=-10, rand_max=10):
-        subprocess.Popen.__init__(self,
-                                  'stockfish',
-                                  universal_newlines=True,
-                                  stdin=subprocess.PIPE,
-                                  stdout=subprocess.PIPE, )
-        self.depth = str(depth)
+    def __init__(self, depth=2, time=False, ponder=False, param={}, rand=False, rand_min=-10, rand_max=10):
+        super().__init__('stockfish',
+                         universal_newlines=True,
+                         stdin=subprocess.PIPE,
+                         stdout=subprocess.PIPE )
+        
+        self.time = self._init_time(time)
+        self.depth = str(depth) if depth is not None else None
         self.ponder = ponder
         self.put('uci')
         if not ponder:
@@ -199,7 +200,14 @@ class Engine(subprocess.Popen):
         self.isready()
 
     def go(self):
-        self.put('go depth %s' % self.depth)
+        params = {}
+        if self.time:
+            params = self.time
+        if self.depth:
+            params['depth'] = self.depth
+            
+        query = ' '.join(['go', *[' '.join([key,val]) for key, val in params.items()]])
+        self.put(query)
 
     @staticmethod
     def _movelisttostr(moves):
@@ -252,6 +260,56 @@ class Engine(subprocess.Popen):
             result_dict.update(Engine._get_info_singlevalue_subfield(text, field))
 
         return result_dict
+    
+    @staticmethod
+    def _init_time(time):
+        """
+        Helper function to parse the time parameter in __init__ and set it to a standardised value.
+        """
+        
+        # Arg time in __init__ can be a tuple in any of the following formats:
+        #     (wtime, btime)
+        #     (wtime, btime, inc)
+        #     (wtime, btime, winc, binc)
+        # It can also be a dict with the same keys. If time is a falsey
+        # value, it disables time search and only uses depth search (default)
+        result = None
+        
+        if type(time) is tuple:
+            assert len(time) in (2, 3, 4)
+            result = {
+                'wtime': time[0],
+                'btime': time[1]
+            }
+            if len(tuple) == 3:
+                result['winc'] = time[3]
+                result['binc'] = time[3]
+            elif len(tuple) == 4:
+                result['winc'] = time[3]
+                result['binc'] = time[4]
+            result = [str(k) for k in result]
+                
+        elif type(time) is dict:
+            assert 'wtime' in time
+            assert 'btime' in time
+            
+            if len(time.keys()) == 3:
+                assert 'inc' in time
+                time['winc'] = time['inc']
+                time['binc'] = time['inc']
+                del time['inc']
+                
+             elif len(time.keys()) == 4:
+                assert 'winc' in time
+                assert 'binc' in time
+            
+            result = time
+            result = [str(k) for k in result]
+        
+        elif not time: result = time
+        else: raise ValueError('Invalid value for time.')
+            
+        return result
 
     @staticmethod
     def _get_info_singlevalue_subfield(info, field):
